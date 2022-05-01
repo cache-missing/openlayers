@@ -11,7 +11,8 @@ import {createCanvasContext2D} from '../../dom.js';
 import {intersects} from '../../extent.js';
 import {numberSafeCompareFunction} from '../../array.js';
 
-export const HIT_DETECT_RESOLUTION = 0.5;
+export const HIT_DETECT_RESOLUTION = 1;
+const HIT_RADIUS = 0;
 
 /**
  * @param {import("../../size.js").Size} size Canvas size in css pixels.
@@ -162,25 +163,45 @@ export function createHitDetectionImageData(
  * @return {Array<import("../../Feature").FeatureLike>} features Features.
  */
 export function hitDetect(pixel, features, imageData) {
-  const resultFeatures = [];
-  if (imageData) {
+  const try_get = (radius) => {
+    const resultFeatures = [];
     const x = Math.floor(Math.round(pixel[0]) * HIT_DETECT_RESOLUTION);
     const y = Math.floor(Math.round(pixel[1]) * HIT_DETECT_RESOLUTION);
-    // The pixel coordinate is clamped down to the hit-detect canvas' size to account
-    // for browsers returning coordinates slightly larger than the actual canvas size
-    // due to a non-integer pixel ratio.
-    const index =
-      (clamp(x, 0, imageData.width - 1) +
-        clamp(y, 0, imageData.height - 1) * imageData.width) *
-      4;
-    const r = imageData.data[index];
-    const g = imageData.data[index + 1];
-    const b = imageData.data[index + 2];
-    const i = b + 256 * (g + 256 * r);
-    const indexFactor = Math.floor((256 * 256 * 256 - 1) / features.length);
-    if (i && i % indexFactor === 0) {
-      resultFeatures.push(features[i / indexFactor - 1]);
+
+    for (let delta_x = -radius; delta_x <= radius; delta_x++) {
+      for (let delta_y = -radius; delta_y <= radius; delta_y++) {
+        // The pixel coordinate is clamped down to the hit-detect canvas' size to account
+        // for browsers returning coordinates slightly larger than the actual canvas size
+        // due to a non-integer pixel ratio.
+        const index =
+          (clamp(x + delta_x, 0, imageData.width - 1) +
+            clamp(y + delta_y, 0, imageData.height - 1) * imageData.width) *
+          4;
+        const r = imageData.data[index];
+        const g = imageData.data[index + 1];
+        const b = imageData.data[index + 2];
+        const i = b + 256 * (g + 256 * r);
+        const indexFactor = Math.floor((256 * 256 * 256 - 1) / features.length);
+        if (i && i % indexFactor === 0) {
+          resultFeatures.push(features[i / indexFactor - 1]);
+        }
+      }
     }
+
+    return resultFeatures;
+  };
+
+  if (imageData) {
+    for (let i = 0; i <= HIT_RADIUS; i++) {
+      const result = try_get(i);
+      if (result) {
+        return result;
+      }
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('imageData is null');
   }
-  return resultFeatures;
+
+  return [];
 }
